@@ -10,33 +10,43 @@ This repository includes a PowerShell script that reproduces the Windows desktop
 
 ## How to run this code (Windows)
 
-1. Open **PowerShell** (Windows PowerShell 5.1 or PowerShell 7+) as your normal user.
-2. Go to the folder containing the script:
+1. Open **PowerShell** in the folder that contains `toggle-desktop-icons.ps1`.
+
+2. Run the script with a **relative path** (important):
 
 ```powershell
-cd "C:\path\to\folder"
+.\toggle-desktop-icons.ps1
 ```
 
-3. (Optional, first time only) allow local scripts in this PowerShell session:
+3. Optional modes:
+
+```powershell
+.\toggle-desktop-icons.ps1 -Mode Hide
+.\toggle-desktop-icons.ps1 -Mode Show
+```
+
+## If you get “command not found”
+
+PowerShell does **not** run scripts from the current folder unless you include `./` or `.\`.
+
+- ❌ `toggle-desktop-icons.ps1`
+- ✅ `.\toggle-desktop-icons.ps1`
+
+Also make sure the filename is exactly `toggle-desktop-icons.ps1` (with `.ps1`).
+
+## If you get “running scripts is disabled”
+
+Run this in the same PowerShell window (temporary for current session only):
 
 ```powershell
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ```
 
-4. Run one of the commands below:
+Then run:
 
 ```powershell
-# Toggle current state
 .\toggle-desktop-icons.ps1
-
-# Explicitly hide icons
-.\toggle-desktop-icons.ps1 -Mode Hide
-
-# Explicitly show icons
-.\toggle-desktop-icons.ps1 -Mode Show
 ```
-
-> Note: The script restarts `explorer.exe` to refresh the desktop, so your taskbar/desktop may briefly disappear and come back.
 
 ## Parameters
 
@@ -50,3 +60,4 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
   - `0` = show icons
   - `1` = hide icons
 - Restarts `explorer.exe` so the change is applied immediately.
+- Your desktop/taskbar may briefly disappear and come back while Explorer restarts.
