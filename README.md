@@ -88,3 +88,14 @@ Then run again:
 - `-Mode Toggle` (default): switches to the opposite state.
 - `-Mode Hide`: force hide desktop icons.
 - `-Mode Show`: force show desktop icons.
+
+
+## If icons still will not unhide
+
+Run the explicit show command:
+
+```powershell
+.\toggle-desktop-icons.ps1 -Mode Show
+```
+
+This version writes `HideIcons = 0`, then performs a full Explorer restart (**stop + start**) and verifies the final value, which helps on systems where Explorer races and rewrites settings during startup.
