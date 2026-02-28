@@ -1,7 +1,9 @@
 [CmdletBinding()]
 param(
     [ValidateSet('Toggle', 'Show', 'Hide')]
-    [string]$Mode = 'Toggle'
+    [string]$Mode = 'Toggle',
+
+    [switch]$RestartExplorer
 )
 
 $registryPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
@@ -26,6 +28,11 @@ function Set-HideIconsValue([int]$Value) {
     Set-ItemProperty -Path $registryPath -Name $registryName -Type DWord -Value $Value
 }
 
+function Refresh-DesktopWithoutExplorerRestart {
+    # Ask Windows shell to refresh desktop settings/icons without killing Explorer.
+    & "$env:WINDIR\System32\ie4uinit.exe" -show | Out-Null
+}
+
 $currentValue = Get-HideIconsValue
 $currentHidden = $currentValue -eq 1
 
@@ -37,27 +44,33 @@ switch ($Mode) {
 
 $targetValue = if ($targetHidden) { 1 } else { 0 }
 
-# Always apply the requested state to handle cases where visual state and registry value are out of sync.
+# Always apply target state to recover out-of-sync visual/registry states.
 Set-HideIconsValue -Value $targetValue
 
-# On some systems a policy value can keep icons hidden even when HideIcons is 0.
-if (-not $targetHidden) {
-    if (-not (Test-Path $policyPath)) {
-        New-Item -Path $policyPath -Force | Out-Null
+# If policy key already exists, try to ensure it does not force-hide icons.
+# Do not create this key (can be blocked by policy on managed devices).
+if (-not $targetHidden -and (Test-Path $policyPath)) {
+    try {
+        Set-ItemProperty -Path $policyPath -Name $policyName -Type DWord -Value 0 -ErrorAction Stop
     }
-
-    Set-ItemProperty -Path $policyPath -Name $policyName -Type DWord -Value 0
+    catch {
+        Write-Verbose "Could not update $policyPath\\$policyName (policy-managed or access denied)."
+    }
 }
 
-# Restart Explorer deterministically: stop all instances and start it again.
-Get-Process explorer -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-Start-Sleep -Milliseconds 700
-Start-Process explorer.exe
-Start-Sleep -Seconds 1
+if ($RestartExplorer) {
+    # Optional hard refresh. May open a File Explorer window on some systems.
+    Get-Process explorer -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 700
+    Start-Process explorer.exe
+    Start-Sleep -Seconds 1
 
-# Re-apply once after Explorer starts in case startup rewrites the value.
-if ((Get-HideIconsValue) -ne $targetValue) {
-    Set-HideIconsValue -Value $targetValue
+    if ((Get-HideIconsValue) -ne $targetValue) {
+        Set-HideIconsValue -Value $targetValue
+    }
+}
+else {
+    Refresh-DesktopWithoutExplorerRestart
 }
 
 $finalValue = Get-HideIconsValue

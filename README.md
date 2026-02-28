@@ -10,58 +10,37 @@ This repository includes a PowerShell script that reproduces the Windows desktop
 
 ## How to run this code (Windows)
 
-1. Open **PowerShell** in the folder that contains `toggle-desktop-icons.ps1`.
-2. Run with a relative path (important):
-
 ```powershell
 .\toggle-desktop-icons.ps1
 ```
 
-3. Optional explicit modes:
+Explicit modes:
 
 ```powershell
 .\toggle-desktop-icons.ps1 -Mode Hide
 .\toggle-desktop-icons.ps1 -Mode Show
 ```
 
-## Fix for "can hide but cannot unhide"
+## Fix for "cannot unhide" and Explorer window popping
 
-This script now uses a simple, reliable flow:
+This version does **not** restart Explorer by default.
 
-1. Read `HideIcons` from `HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced`.
-2. Force-set the exact target value (`1` = hide, `0` = show) every run (even if registry already looks correct).
-3. On `-Mode Show`, also set `NoDesktop = 0` policy fallback.
-4. Restart `explorer.exe` so Windows applies the change immediately.
+- It force-writes `HideIcons` every run (`1` hide / `0` show).
+- For `Show`, if `Policies\Explorer` already exists, it tries to set `NoDesktop=0`.
+- It refreshes desktop settings without killing Explorer, so it avoids the “home folder/File Explorer pops up” issue.
 
-This avoids the previous native API issues (`EnumWindows`, `SendMessageTimeout`, and `$Host` variable conflicts).
-
-
-## If you get parse errors mentioning `--- a/` or `+++ b/`
-
-Your `toggle-desktop-icons.ps1` file was likely replaced with a **git diff patch** instead of actual script content.
-That is why PowerShell shows errors like:
-
-- `Missing expression after unary operator '-'`
-- `Unexpected token 'a/toggle-desktop-icons.ps1'`
-
-### Quick fix
-
-1. Open `toggle-desktop-icons.ps1` in Notepad.
-2. Delete everything.
-3. Paste the real script content from this repo (the file should start with `[CmdletBinding()]`).
-4. Save and run:
+If you still need a hard refresh, use:
 
 ```powershell
-.\toggle-desktop-icons.ps1 -Mode Show
+.\toggle-desktop-icons.ps1 -Mode Show -RestartExplorer
 ```
 
-If the first lines in your script look like this, it is wrong (diff text):
+> Note: `-RestartExplorer` may open a File Explorer window on some systems.
 
-```text
---- a/toggle-desktop-icons.ps1
-+++ b/toggle-desktop-icons.ps1
-@@ ...
-```
+## If policy key access is denied
+
+On managed/corporate machines, `HKCU\...\Policies\Explorer` can be locked.
+The script now skips creating that key and continues with `HideIcons` changes.
 
 ## If you get “command not found”
 
@@ -89,21 +68,16 @@ Then run again:
 - `-Mode Toggle` (default): switches to the opposite state.
 - `-Mode Hide`: force hide desktop icons.
 - `-Mode Show`: force show desktop icons.
+- `-RestartExplorer`: optional hard refresh (can pop File Explorer window).
 
+## If your script file contains git diff text
 
-## If icons still will not unhide
+If the file starts with lines like these, it is broken content (diff), not script:
 
-Run the explicit show command:
-
-```powershell
-.\toggle-desktop-icons.ps1 -Mode Show
+```text
+--- a/toggle-desktop-icons.ps1
++++ b/toggle-desktop-icons.ps1
+@@ ...
 ```
 
-This version writes `HideIcons = 0`, then performs a full Explorer restart (**stop + start**) and verifies the final value, which helps on systems where Explorer races and rewrites settings during startup.
-
-
-## Why this version helps with "still cannot unhide"
-
-Some systems get into a state where icons are hidden but `HideIcons` already reads `0`. In that case, scripts that skip work when values look unchanged will do nothing.
-
-This script **always force-applies** the requested mode and restarts Explorer, so `-Mode Show` can recover from out-of-sync states.
+Replace the file with the actual script content from this repository.
