@@ -11,14 +11,13 @@ This repository includes a PowerShell script that reproduces the Windows desktop
 ## How to run this code (Windows)
 
 1. Open **PowerShell** in the folder that contains `toggle-desktop-icons.ps1`.
-
-2. Run the script with a **relative path** (important):
+2. Run with a relative path (important):
 
 ```powershell
 .\toggle-desktop-icons.ps1
 ```
 
-3. Optional modes:
+3. Optional explicit modes:
 
 ```powershell
 .\toggle-desktop-icons.ps1 -Mode Hide
@@ -32,17 +31,15 @@ PowerShell does **not** run scripts from the current folder unless you include `
 - ❌ `toggle-desktop-icons.ps1`
 - ✅ `.\toggle-desktop-icons.ps1`
 
-Also make sure the filename is exactly `toggle-desktop-icons.ps1` (with `.ps1`).
-
 ## If you get “running scripts is disabled”
 
-Run this in the same PowerShell window (temporary for current session only):
+Run this in the same PowerShell window (temporary for current session):
 
 ```powershell
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ```
 
-Then run:
+Then run again:
 
 ```powershell
 .\toggle-desktop-icons.ps1
@@ -50,14 +47,12 @@ Then run:
 
 ## Parameters
 
-- `-Mode Toggle` (default): switches to the opposite of the current state.
-- `-Mode Hide`: hides desktop icons.
-- `-Mode Show`: shows desktop icons.
+- `-Mode Toggle` (default): switches to the opposite state.
+- `-Mode Hide`: force hide desktop icons.
+- `-Mode Show`: force show desktop icons.
 
-## What it does
+## How it works
 
-- Updates `HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced\HideIcons`
-  - `0` = show icons
-  - `1` = hide icons
-- Restarts `explorer.exe` so the change is applied immediately.
-- Your desktop/taskbar may briefly disappear and come back while Explorer restarts.
+- Reads `HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced\HideIcons`.
+- Sends the same Windows shell command (`Progman` `WM_COMMAND` `0x7402`) used by the desktop context menu toggle.
+- Prints the final state.

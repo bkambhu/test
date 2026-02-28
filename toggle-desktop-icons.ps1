@@ -16,25 +16,48 @@ if ($null -eq $currentValue) {
     $currentValue = 0
 }
 
+$currentHidden = [int]$currentValue -eq 1
+
 switch ($Mode) {
-    'Hide'   { $newValue = 1 }
-    'Show'   { $newValue = 0 }
-    'Toggle' {
-        if ($currentValue -eq 0) {
-            $newValue = 1
-        }
-        else {
-            $newValue = 0
-        }
-    }
+    'Hide'   { $targetHidden = $true }
+    'Show'   { $targetHidden = $false }
+    'Toggle' { $targetHidden = -not $currentHidden }
 }
 
-Set-ItemProperty -Path $registryPath -Name $registryName -Type DWord -Value $newValue
+if ($currentHidden -ne $targetHidden) {
+    if (-not ('DesktopIconToggle' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
 
-# Refresh desktop view by restarting Explorer.
-Stop-Process -Name explorer -Force
+public static class DesktopIconToggle {
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    public static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
 
-if ($newValue -eq 1) {
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+}
+'@
+    }
+
+    $progman = [DesktopIconToggle]::FindWindow('Progman', $null)
+    if ($progman -eq [IntPtr]::Zero) {
+        throw 'Unable to find Progman window. Cannot toggle desktop icons.'
+    }
+
+    $WM_COMMAND = 0x0111
+    $TOGGLE_DESKTOP_ICONS_COMMAND = 0x7402
+    [void][DesktopIconToggle]::SendMessage($progman, $WM_COMMAND, [IntPtr]$TOGGLE_DESKTOP_ICONS_COMMAND, [IntPtr]::Zero)
+
+    Start-Sleep -Milliseconds 200
+}
+
+$updatedValue = (Get-ItemProperty -Path $registryPath -Name $registryName -ErrorAction SilentlyContinue).$registryName
+if ($null -eq $updatedValue) {
+    $updatedValue = if ($targetHidden) { 1 } else { 0 }
+}
+
+if ([int]$updatedValue -eq 1) {
     Write-Output 'Desktop icons are now hidden.'
 }
 else {
