@@ -29,8 +29,9 @@ This repository includes a PowerShell script that reproduces the Windows desktop
 This script now uses a simple, reliable flow:
 
 1. Read `HideIcons` from `HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced`.
-2. Set the exact target value (`1` = hide, `0` = show).
-3. Restart `explorer.exe` so Windows applies the change immediately.
+2. Force-set the exact target value (`1` = hide, `0` = show) every run (even if registry already looks correct).
+3. On `-Mode Show`, also set `NoDesktop = 0` policy fallback.
+4. Restart `explorer.exe` so Windows applies the change immediately.
 
 This avoids the previous native API issues (`EnumWindows`, `SendMessageTimeout`, and `$Host` variable conflicts).
 
@@ -99,3 +100,10 @@ Run the explicit show command:
 ```
 
 This version writes `HideIcons = 0`, then performs a full Explorer restart (**stop + start**) and verifies the final value, which helps on systems where Explorer races and rewrites settings during startup.
+
+
+## Why this version helps with "still cannot unhide"
+
+Some systems get into a state where icons are hidden but `HideIcons` already reads `0`. In that case, scripts that skip work when values look unchanged will do nothing.
+
+This script **always force-applies** the requested mode and restarts Explorer, so `-Mode Show` can recover from out-of-sync states.
