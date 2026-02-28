@@ -34,6 +34,34 @@ This script now uses a simple, reliable flow:
 
 This avoids the previous native API issues (`EnumWindows`, `SendMessageTimeout`, and `$Host` variable conflicts).
 
+
+## If you get parse errors mentioning `--- a/` or `+++ b/`
+
+Your `toggle-desktop-icons.ps1` file was likely replaced with a **git diff patch** instead of actual script content.
+That is why PowerShell shows errors like:
+
+- `Missing expression after unary operator '-'`
+- `Unexpected token 'a/toggle-desktop-icons.ps1'`
+
+### Quick fix
+
+1. Open `toggle-desktop-icons.ps1` in Notepad.
+2. Delete everything.
+3. Paste the real script content from this repo (the file should start with `[CmdletBinding()]`).
+4. Save and run:
+
+```powershell
+.\toggle-desktop-icons.ps1 -Mode Show
+```
+
+If the first lines in your script look like this, it is wrong (diff text):
+
+```text
+--- a/toggle-desktop-icons.ps1
++++ b/toggle-desktop-icons.ps1
+@@ ...
+```
+
 ## If you get “command not found”
 
 PowerShell does **not** run scripts from the current folder unless you include `./` or `.\`.
