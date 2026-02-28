@@ -24,6 +24,21 @@ This repository includes a PowerShell script that reproduces the Windows desktop
 .\toggle-desktop-icons.ps1 -Mode Show
 ```
 
+To see fallback details, run with verbose output:
+
+```powershell
+.\toggle-desktop-icons.ps1 -Verbose
+```
+
+## Fix for "Unable to find Progman window"
+
+Some Windows setups do not expose a `Progman` host in the same way. The script now:
+
+1. Tries the shell command host (`Progman` or a top-level window containing `SHELLDLL_DefView`).
+2. If not found, falls back to directly setting the `HideIcons` registry value and refreshing Explorer.
+
+So even if shell host detection fails, `-Mode Show` and `-Mode Hide` should still work.
+
 ## If you get “command not found”
 
 PowerShell does **not** run scripts from the current folder unless you include `./` or `.\`.
@@ -54,5 +69,6 @@ Then run again:
 ## How it works
 
 - Reads `HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced\HideIcons`.
-- Sends the same Windows shell command (`Progman` `WM_COMMAND` `0x7402`) used by the desktop context menu toggle.
+- Tries the Windows shell toggle command (`WM_COMMAND 0x7402`) against the desktop host.
+- Falls back to directly writing `HideIcons` and refreshing Explorer if needed.
 - Prints the final state.

@@ -11,13 +11,93 @@ if (-not (Test-Path $registryPath)) {
     New-Item -Path $registryPath -Force | Out-Null
 }
 
-$currentValue = (Get-ItemProperty -Path $registryPath -Name $registryName -ErrorAction SilentlyContinue).$registryName
-if ($null -eq $currentValue) {
-    $currentValue = 0
+function Get-HideIconsValue {
+    $value = (Get-ItemProperty -Path $registryPath -Name $registryName -ErrorAction SilentlyContinue).$registryName
+    if ($null -eq $value) { return 0 }
+    return [int]$value
 }
 
-$currentHidden = [int]$currentValue -eq 1
+function Set-HideIconsValue([bool]$Hidden) {
+    $newValue = if ($Hidden) { 1 } else { 0 }
+    Set-ItemProperty -Path $registryPath -Name $registryName -Type DWord -Value $newValue
+}
 
+function Ensure-NativeDesktopApi {
+    if ('DesktopIconToggle' -as [type]) { return }
+
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+
+public static class DesktopIconToggle {
+    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    public static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
+
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    public static extern IntPtr FindWindowEx(IntPtr parentHandle, IntPtr childAfter, string className, string windowTitle);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
+}
+'@
+}
+
+function Get-DesktopCommandHost {
+    Ensure-NativeDesktopApi
+
+    $progman = [DesktopIconToggle]::FindWindow('Progman', $null)
+    if ($progman -ne [IntPtr]::Zero) {
+        return $progman
+    }
+
+    $foundHost = [IntPtr]::Zero
+    $enumProc = [DesktopIconToggle+EnumWindowsProc]{
+        param([IntPtr]$hWnd, [IntPtr]$lParam)
+
+        $defView = [DesktopIconToggle]::FindWindowEx($hWnd, [IntPtr]::Zero, 'SHELLDLL_DefView', $null)
+        if ($defView -ne [IntPtr]::Zero) {
+            $script:foundHost = $hWnd
+            return $false
+        }
+
+        return $true
+    }
+
+    [void][DesktopIconToggle]::EnumWindows($enumProc, [IntPtr]::Zero)
+    return $foundHost
+}
+
+function Invoke-DesktopIconMenuToggle {
+    $host = Get-DesktopCommandHost
+    if ($host -eq [IntPtr]::Zero) {
+        return $false
+    }
+
+    $WM_COMMAND = 0x0111
+    $TOGGLE_DESKTOP_ICONS_COMMAND = 0x7402
+    $SMTO_ABORTIFHUNG = 0x0002
+    $result = [IntPtr]::Zero
+
+    [void][DesktopIconToggle]::SendMessageTimeout(
+        $host,
+        $WM_COMMAND,
+        [IntPtr]$TOGGLE_DESKTOP_ICONS_COMMAND,
+        [IntPtr]::Zero,
+        $SMTO_ABORTIFHUNG,
+        1000,
+        [ref]$result
+    )
+
+    Start-Sleep -Milliseconds 200
+    return $true
+}
+
+$currentHidden = (Get-HideIconsValue) -eq 1
 switch ($Mode) {
     'Hide'   { $targetHidden = $true }
     'Show'   { $targetHidden = $false }
@@ -25,39 +105,22 @@ switch ($Mode) {
 }
 
 if ($currentHidden -ne $targetHidden) {
-    if (-not ('DesktopIconToggle' -as [type])) {
-        Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
+    $toggledViaShell = Invoke-DesktopIconMenuToggle
 
-public static class DesktopIconToggle {
-    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-    public static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    public static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
-}
-'@
+    $updatedHidden = (Get-HideIconsValue) -eq 1
+    if ($updatedHidden -ne $targetHidden) {
+        Set-HideIconsValue -Hidden $targetHidden
+        Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 1
     }
 
-    $progman = [DesktopIconToggle]::FindWindow('Progman', $null)
-    if ($progman -eq [IntPtr]::Zero) {
-        throw 'Unable to find Progman window. Cannot toggle desktop icons.'
+    if (-not $toggledViaShell) {
+        Write-Verbose 'Desktop host window not found; used registry + Explorer refresh fallback.'
     }
-
-    $WM_COMMAND = 0x0111
-    $TOGGLE_DESKTOP_ICONS_COMMAND = 0x7402
-    [void][DesktopIconToggle]::SendMessage($progman, $WM_COMMAND, [IntPtr]$TOGGLE_DESKTOP_ICONS_COMMAND, [IntPtr]::Zero)
-
-    Start-Sleep -Milliseconds 200
 }
 
-$updatedValue = (Get-ItemProperty -Path $registryPath -Name $registryName -ErrorAction SilentlyContinue).$registryName
-if ($null -eq $updatedValue) {
-    $updatedValue = if ($targetHidden) { 1 } else { 0 }
-}
-
-if ([int]$updatedValue -eq 1) {
+$finalHidden = (Get-HideIconsValue) -eq 1
+if ($finalHidden) {
     Write-Output 'Desktop icons are now hidden.'
 }
 else {
